@@ -1,6 +1,7 @@
 package buoy.core
 
 import io.circe.{Json, JsonObject}
+
 /** Pure JSON shape extraction: maps dot-paths to `FieldType`; payload values are not retained. */
 object ShapeExtractor:
 
@@ -12,7 +13,7 @@ object ShapeExtractor:
   def extract(json: Json): Map[String, FieldType] =
     json.asObject match
       case Some(fields) => extractObjectChildren(fields, prefix = "")
-      case None          => Map.empty
+      case None         => Map.empty
 
   private def extractObjectChildren(fields: JsonObject, prefix: String): Map[String, FieldType] =
     fields.toList.foldLeft(Map.empty[String, FieldType]) { case (acc, (key, child)) =>
