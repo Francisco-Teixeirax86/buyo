@@ -17,3 +17,8 @@ hs_err_pid*
 .cursor/PROJECT_BRAIN.md
 .cursor/GOTCHAS.md
 .cursor/RULES.md
+
+
+# Local VScode and metals files
+.vscode/
+.metals/
