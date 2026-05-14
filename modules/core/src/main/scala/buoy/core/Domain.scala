@@ -3,6 +3,8 @@ package buoy.core
 import java.time.Instant
 import java.util.UUID
 
+import io.circe.Json
+
 /** Identifies a tenant for routing; carried in the URL path and is not a secret. */
 opaque type AccountId = String
 
@@ -89,8 +91,10 @@ final case class RawEvent(
       */
     // Extraction of this value from headers or body is the proxy module's responsibility, not core.
     eventType: String,
-    /** Parsed payload as text for debugging or logging until a JSON AST is wired in core. */
-    payload: String,
+    /** Parsed JSON body as a [[Json]] value tree (structure used by shape extraction; values may be
+      * traversed for typing only).
+      */
+    payload: Json,
     /** Exact request body bytes as received; must feed the idempotency key and any later crypto or
       * replay checks.
       */
