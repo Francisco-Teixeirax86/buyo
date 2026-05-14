@@ -2,7 +2,8 @@ ThisBuild / scalaVersion := "3.4.2"
 ThisBuild / organization := "dev.buoy"
 ThisBuild / version      := "0.1.0-SNAPSHOT"
 
-val zioVersion = "2.1.24"
+val zioVersion   = "2.1.24"
+val circeVersion = "0.14.10"
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq(
@@ -25,7 +26,13 @@ lazy val commonSettings = Seq(
 lazy val core = project
   .in(file("modules/core"))
   .settings(commonSettings)
-  .settings(name := "buoy-core")
+  .settings(
+    name := "buoy-core",
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-core"   % circeVersion,
+      "io.circe" %% "circe-parser" % circeVersion
+    )
+  )
 
 lazy val proxy = project
   .in(file("modules/proxy"))
