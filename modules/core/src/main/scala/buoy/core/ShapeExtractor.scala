@@ -1,43 +1,21 @@
 package buoy.core
 
 import io.circe.{Json, JsonObject}
-
-/** Pure JSON shape extraction: maps dot-paths to [[FieldType]]; payload values are not retained. */
+/** Pure JSON shape extraction: maps dot-paths to `FieldType`; payload values are not retained. */
 object ShapeExtractor:
 
-  /** Walks a JSON value and returns a flat path → [[FieldType]] map.
+  /** Walks a JSON value and returns a flat path → `FieldType` map.
     *
-    * Example:
-    *
-    * {{{
-    * val json = io.circe.parser.parse("""{
-    *   "id": "pi_123",
-    *   "amount": 1000,
-    *   "metadata": { "order_id": "ord_456" },
-    *   "items": [{ "sku": "abc", "qty": 2 }]
-    * }""").getOrElse(Json.Null)
-    *
-    * ShapeExtractor.extract(json) == Map(
-    *   "id"                -> FieldType.Str,
-    *   "amount"            -> FieldType.Num,
-    *   "metadata"          -> FieldType.Obj,
-    *   "metadata.order_id" -> FieldType.Str,
-    *   "items"             -> FieldType.Arr(FieldType.Obj),
-    *   "items[].sku"       -> FieldType.Str,
-    *   "items[].qty"       -> FieldType.Num
-    * )
-    * }}}
-    *
-    * The root JSON object is not emitted as its own path; only its children (and deeper paths) are
-    * present in the result. Non-object roots produce an empty map.
+    * The top-level JSON record is not emitted as its own path; only its children (and deeper paths)
+    * are present in the result. Top-level arrays or scalars yield an empty map.
     */
   def extract(json: Json): Map[String, FieldType] =
     json.asObject match
-      case Some(root) => extractObjectChildren(root, prefix = "")
-      case None       => Map.empty
+      case Some(fields) => extractObjectChildren(fields, prefix = "")
+      case None          => Map.empty
 
-  private def extractObjectChildren(obj: JsonObject, prefix: String): Map[String, FieldType] =
-    obj.toList.foldLeft(Map.empty[String, FieldType]) { case (acc, (key, child)) =>
+  private def extractObjectChildren(fields: JsonObject, prefix: String): Map[String, FieldType] =
+    fields.toList.foldLeft(Map.empty[String, FieldType]) { case (acc, (key, child)) =>
       val path =
         if prefix.isEmpty then key
         else s"$prefix.$key"
@@ -64,8 +42,8 @@ object ShapeExtractor:
       case _ =>
         Map(path -> FieldType.Union(values.map(directFieldType).toSet))
 
-  /** Unions keys from every object in [[objs]] under [[parentPath]] (dot-separated); used for
-    * object arrays.
+  /** Unions keys from every object in `objs` under `parentPath` (dot-separated); used for object
+    * arrays.
     */
   private def mergeObjectChildren(
       parentPath: String,
@@ -90,18 +68,7 @@ object ShapeExtractor:
         parentPath = s"$path[]",
         objs
       )
-    else if elems.forall(j => primitiveFieldType(j).isDefined) then
-      val primTypes = elems.flatMap(primitiveFieldType).toSet
-      val inner     =
-        if primTypes.size == 1 then primTypes.head
-        else FieldType.Union(primTypes)
-      Map(path -> FieldType.Arr(inner))
-    else
-      val altTypes = elems.map(directFieldType).toSet
-      val inner    =
-        if altTypes.size == 1 then altTypes.head
-        else FieldType.Union(altTypes)
-      Map(path -> FieldType.Arr(inner))
+    else Map(path -> FieldType.Arr(fieldTypeOfArrayElements(elems)))
 
   private def primitiveFieldType(json: Json): Option[FieldType] =
     if json.isNull then Some(FieldType.Null)
@@ -110,15 +77,26 @@ object ShapeExtractor:
     else if json.isString then Some(FieldType.Str)
     else None
 
+  /** Classifies a single JSON value for drift (object/array structure, or a leaf primitive). */
   private def directFieldType(json: Json): FieldType =
     primitiveFieldType(json).getOrElse:
       if json.isObject then FieldType.Obj
       else if json.isArray then
-        val inner = arrayInnerFieldType(json.asArray.fold(Vector.empty[Json])(_.toVector))
-        FieldType.Arr(inner)
+        val elems = json.asArray.fold(Vector.empty[Json])(_.toVector)
+        // Delegate array element unification to `fieldTypeOfArrayElements` so we do not duplicate
+        // the “all objects / all primitives / mixed” matrix that also applies to sibling elements.
+        FieldType.Arr(fieldTypeOfArrayElements(elems))
       else FieldType.Null
 
-  private def arrayInnerFieldType(elems: Vector[Json]): FieldType =
+  /** Unifies several JSON values that occupy the same structural role (e.g. array elements) into
+    * one `FieldType`.
+    *
+    * This is the single place that decides how heterogeneous sibling values collapse (all-objects →
+    * `FieldType.Obj`, all-primitives → one primitive or `FieldType.Union`, otherwise
+    * `FieldType.Union` of `directFieldType`). Nested arrays recurse through `directFieldType`
+    * without re-stating that matrix.
+    */
+  private def fieldTypeOfArrayElements(elems: Vector[Json]): FieldType =
     if elems.isEmpty then FieldType.Null
     else if elems.forall(_.isObject) then FieldType.Obj
     else if elems.forall(j => primitiveFieldType(j).isDefined) then

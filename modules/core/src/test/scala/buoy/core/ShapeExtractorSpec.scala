@@ -48,6 +48,25 @@ object ShapeExtractorSpec extends ZIOSpecDefault:
           got.get("items[].b").contains(FieldType.Num)
         )
       },
+      test(
+        "for an array of objects, unions keys when optional fields are omitted on some elements"
+      ) {
+        val json = Json.obj(
+          "items" -> Json.arr(
+            Json.obj(
+              "a" -> Json.fromInt(1),
+              "b" -> Json.fromInt(2)
+            ),
+            Json.obj("b" -> Json.fromInt(3))
+          )
+        )
+        val got = ShapeExtractor.extract(json)
+        assertTrue(
+          got.get("items").contains(FieldType.Arr(FieldType.Obj)),
+          got.get("items[].a").contains(FieldType.Num),
+          got.get("items[].b").contains(FieldType.Num)
+        )
+      },
       test("empty JSON array extracts as Arr(Null)") {
         val json = Json.obj("x" -> Json.arr())
         val got  = ShapeExtractor.extract(json)
